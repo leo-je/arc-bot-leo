@@ -101,7 +101,7 @@ export async function provisionFeishuBot(options = {}) {
     desc = DEFAULT_APP_DESC,
     avatar,
     domain = 'feishu',
-    qrPngPath = path.join(os.homedir(), '.arc-bot', 'feishu-qr.png'),
+    qrPngPath = path.join(os.homedir(), '.arc-bot-leo', 'feishu-qr.png'),
     writePngFile = true,
     log = console.log,
     timeoutMs = DEFAULT_TIMEOUT_MS,
@@ -128,7 +128,7 @@ export async function provisionFeishuBot(options = {}) {
   try {
     const result = await registerApp({
       domain: registrationHost(domain),
-      source: 'arc-bot',
+      source: 'arc-bot-leo',
       createOnly: true,
       appPreset,
       addons: {

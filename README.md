@@ -1,3 +1,6 @@
+> **本项目 fork 自 [wo6x5a/arc](https://github.com/wo6x5a/arc)**，并在其基础上扩展了飞书接入能力（扫码创建机器人、卡片流式渲染、`/` 快捷指令面板等）。
+> 本 fork 相对上游的全部变更，见 **[FORK.md](FORK.md)**。
+
 # ARC — AI Remote Coding
 
 通过 Telegram Bot、WhatsApp Bot、飞书 Bot 或钉钉 Bot 远程控制本机的 AI 编程助手（Claude Code、Gemini CLI、Qwen Code、Codex 等），在手机上发消息即可让 AI 帮你读代码、写代码、执行命令、提交代码等。
@@ -41,18 +44,18 @@ Bot：✅ 任务完成
 ## 安装
 
 ```bash
-npm install -g arc-bot
+npm install -g arc-bot-leo
 ```
 
-安装完成后，运行 `arc-bot start`，首次启动会自动进入交互式配置向导，引导你填写各平台的 Token 和白名单。配置完成后自动启动服务。
+安装完成后，运行 `arc-bot-leo start`，首次启动会自动进入交互式配置向导，引导你填写各平台的 Token 和白名单。配置完成后自动启动服务。
 
 ```bash
-arc-bot start    # 启动（首次自动配置）
-arc-bot config   # 重新配置
-arc-bot stop     # 停止
-arc-bot restart  # 重启
-arc-bot logs     # 查看日志
-arc-bot status   # 查看状态
+arc-bot-leo start    # 启动（首次自动配置）
+arc-bot-leo config   # 重新配置
+arc-bot-leo stop     # 停止
+arc-bot-leo restart  # 重启
+arc-bot-leo logs     # 查看日志
+arc-bot-leo status   # 查看状态
 ```
 
 ---

@@ -1,11 +1,11 @@
 {
-  "name": "arc-bot",
-  "version": "1.1.6",
+  "name": "arc-bot-leo",
+  "version": "1.1.7",
   "description": "ARC (AI Remote Coding) - Control AI coding agents via messaging apps",
   "type": "module",
   "main": "src/main.js",
   "bin": {
-    "arc-bot": "./bin/arc-bot.js"
+    "arc-bot-leo": "./bin/arc-bot-leo.js"
   },
   "engines": {
     "node": ">=18"
@@ -14,9 +14,9 @@
     "start": "node src/main.js",
     "dev": "node --watch src/main.js",
     "pm2:start": "pm2 start ecosystem.config.cjs",
-    "pm2:stop": "pm2 stop arc",
-    "pm2:restart": "pm2 restart arc",
-    "pm2:logs": "pm2 logs arc",
+    "pm2:stop": "pm2 stop arc-bot-leo",
+    "pm2:restart": "pm2 restart arc-bot-leo",
+    "pm2:logs": "pm2 logs arc-bot-leo",
     "pm2:status": "pm2 status",
     "test": "node --test feishuCard/test/*.test.mjs"
   },

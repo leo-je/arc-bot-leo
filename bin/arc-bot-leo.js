@@ -3,7 +3,7 @@ import { start, stop, restart, logs, status } from '../lib/pm2-manager.js'
 import { runWizard } from '../lib/setup-wizard.js'
 import { isConfigured, readEnv } from '../lib/config.js'
 
-const USAGE = `Usage: arc-bot [command]
+const USAGE = `Usage: arc-bot-leo [command]
 
 Commands:
   start    Start the bot (runs setup wizard if not configured)

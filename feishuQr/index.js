@@ -1,8 +1,8 @@
 /**
- * `arc-bot feishu-qr` —— 扫码创建飞书机器人并写入配置。
+ * `arc-bot-leo feishu-qr` —— 扫码创建飞书机器人并写入配置。
  *
  * 目录约定：本目录下所有文件都是**新增**的，唯一的对外接触面是
- * `runFeishuQrSetup()`（被 bin/arc-bot.js 调一行）。
+ * `runFeishuQrSetup()`（被 bin/arc-bot-leo.js 调一行）。
  * 目的：合并上游时冲突面最小。
  *
  * 不做的事：
@@ -17,7 +17,7 @@ import { provisionFeishuBot, DEFAULT_APP_NAME, DEFAULT_APP_DESC } from './provis
 import { registerSlashCommands, rebuildSlashCommands } from './slash-commands.js'
 import { resolveAvatarUrl, describeAvatarSupport } from './avatar.js'
 
-const USAGE = `Usage: arc-bot feishu-qr [options]
+const USAGE = `Usage: arc-bot-leo feishu-qr [options]
 
 用手机飞书扫码，自动创建一个飞书自建应用（机器人）并写入配置。
 不需要去开发者后台手动创建应用，也不需要公网 IP。
@@ -100,7 +100,7 @@ function reportSlash(slash) {
     return
   }
   console.warn(`⚠️  快捷指令未注册：${slash.error}`)
-  console.warn('   不影响收发消息；补好权限后重跑 `arc-bot feishu-qr --slash` 即可。')
+  console.warn('   不影响收发消息；补好权限后重跑 `arc-bot-leo feishu-qr --slash` 即可。')
 }
 
 /**
@@ -119,7 +119,7 @@ export async function runFeishuQrSetup(argv = []) {
   if (opts.slashOnly || opts.rebuild) {
     const env = readEnv()
     if (!env.FEISHU_APP_ID || !env.FEISHU_APP_SECRET) {
-      throw new Error('还没有配置飞书应用，先运行 `arc-bot feishu-qr` 扫码创建。')
+      throw new Error('还没有配置飞书应用，先运行 `arc-bot-leo feishu-qr` 扫码创建。')
     }
     console.log(`正在为 ${env.FEISHU_APP_ID} ${opts.rebuild ? '重建' : '同步'} "/" 快捷指令…`)
     const slash = await (opts.rebuild ? rebuildSlashCommands : registerSlashCommands)({
@@ -208,7 +208,7 @@ export async function runFeishuQrSetup(argv = []) {
   console.log('下一步：')
   console.log('  1. 打开飞书开发者后台 → 你的应用 → 版本管理与发布 → 创建版本并申请发布')
   console.log('     （扫码创建的应用需完成发布审批，权限才会生效）')
-  console.log('  2. 运行：arc-bot start')
+  console.log('  2. 运行：arc-bot-leo start')
   if (result.qrPngPath) {
     console.log('')
     console.log(`二维码图片已保存在：${result.qrPngPath}（可删除）`)

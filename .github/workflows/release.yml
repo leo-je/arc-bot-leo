@@ -57,7 +57,7 @@ jobs:
         id: pack
         run: |
           npm pack --silent > /dev/null
-          file="$(ls -1 arc-bot-*.tgz | head -1)"
+          file="$(ls -1 arc-bot-leo-*.tgz | head -1)"
           if [ -z "$file" ]; then
             echo "npm pack 没有产出 tgz"
             exit 1

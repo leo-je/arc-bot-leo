@@ -25,5 +25,5 @@ npm pack --dry-run
 ## 用户更新到最新版
 
 ```bash
-npm install -g arc-bot@latest
+npm install -g arc-bot-leo@latest
 ```

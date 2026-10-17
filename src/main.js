@@ -4,13 +4,13 @@ import path from 'path'
 import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'fs'
 import { fileURLToPath } from 'url'
 
-// Priority: ~/.arc-bot/.env (global config) > ./.env (dev fallback)
-dotenv.config({ path: path.join(homedir(), '.arc-bot', '.env') })
+// Priority: ~/.arc-bot-leo/.env (global config) > ./.env (dev fallback)
+dotenv.config({ path: path.join(homedir(), '.arc-bot-leo', '.env') })
 dotenv.config() // second call: existing keys are NOT overwritten (dotenv default)
 
 // PID 文件锁：防止多实例同时运行
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
-const PID_FILE = path.join(homedir(), '.arc-bot', '.arc.pid')
+const PID_FILE = path.join(homedir(), '.arc-bot-leo', '.arc.pid')
 
 const SKIP_PID_LOCK = process.env.ARC_SKIP_PID_LOCK === '1'
 

@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: 'arc',
+      name: 'arc-bot-leo',
       script: 'src/main.js',
       interpreter: 'node',
       // 崩溃后自动重启，最多连续失败 10 次

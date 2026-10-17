@@ -85,7 +85,7 @@
 
 需要 `cardkit:card:write`（租户级）。
 
-- 用 `arc-bot feishu-qr` 扫码建出来的应用，该权限已在 `feishuQr/provision.js` 的 `PROVISION_TENANT_SCOPES` 里声明，开箱可用。
+- 用 `arc-bot-leo feishu-qr` 扫码建出来的应用，该权限已在 `feishuQr/provision.js` 的 `PROVISION_TENANT_SCOPES` 里声明，开箱可用。
 - 手工建的老应用需要去开发者后台自己加，然后**发布版本**才生效。缺权限时报 `99991672`。
 
 ## 降级策略

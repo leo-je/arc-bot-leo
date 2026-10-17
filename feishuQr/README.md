@@ -1,6 +1,6 @@
 # feishuQr —— 飞书扫码接入
 
-> **这个目录是一个隔离层。** 除了 `bin/arc-bot.js` 和 `lib/setup-wizard.js` 各一处几行的
+> **这个目录是一个隔离层。** 除了 `bin/arc-bot-leo.js` 和 `lib/setup-wizard.js` 各一处几行的
 > 挂载点，飞书扫码相关的全部代码都在这里。目的很直接：**降低合并上游时的冲突面**。
 > 如果你要改扫码相关的东西，只需要看这个目录。
 
@@ -14,10 +14,10 @@
 现在：
 
 ```bash
-npx arc-bot feishu-qr
+npx arc-bot-leo feishu-qr
 ```
 
-手机飞书扫一下码，应用就建好了，凭据自动写进 `~/.arc-bot/.env`。
+手机飞书扫一下码，应用就建好了，凭据自动写进 `~/.arc-bot-leo/.env`。
 
 **不需要公网 IP**，因为走的是设备码（device code）流程，不是回调。
 
@@ -30,16 +30,16 @@ npx arc-bot feishu-qr
 npm install
 
 # 扫码创建
-npx arc-bot feishu-qr
+npx arc-bot-leo feishu-qr
 
 # 或者带参数
-npx arc-bot feishu-qr --name "我的编码助手" --avatar builtin
+npx arc-bot-leo feishu-qr --name "我的编码助手" --avatar builtin
 ```
 
 也可以在交互式向导里选：
 
 ```bash
-npx arc-bot config
+npx arc-bot-leo config
 # → 飞书接入方式: 扫码创建 / 手动填写
 ```
 
@@ -72,8 +72,8 @@ npx arc-bot config
 ### 3.2 应用头像
 
 ```bash
-npx arc-bot feishu-qr --avatar builtin              # 用仓库内置图
-npx arc-bot feishu-qr --avatar https://x.com/a.png  # 用自己的公网图
+npx arc-bot-leo feishu-qr --avatar builtin              # 用仓库内置图
+npx arc-bot-leo feishu-qr --avatar https://x.com/a.png  # 用自己的公网图
 ```
 
 **必须知道的三件事**（很多文章写错）：
@@ -96,10 +96,10 @@ node feishuQr/assets/make-avatar.mjs
 ### 3.3 "/" 快捷指令
 
 ```bash
-npx arc-bot feishu-qr            # 扫码建应用时顺手注册
-npx arc-bot feishu-qr --skip-slash   # 跳过
-npx arc-bot feishu-qr --slash        # 只同步：补缺的，不动已有凭据（改完清单跑这个）
-npx arc-bot feishu-qr --rebuild      # 全删再按顺序重建（只有它能把面板顺序摆正）
+npx arc-bot-leo feishu-qr            # 扫码建应用时顺手注册
+npx arc-bot-leo feishu-qr --skip-slash   # 跳过
+npx arc-bot-leo feishu-qr --slash        # 只同步：补缺的，不动已有凭据（改完清单跑这个）
+npx arc-bot-leo feishu-qr --rebuild      # 全删再按顺序重建（只有它能把面板顺序摆正）
 ```
 
 - 面板由**飞书客户端**渲染，命令清单存在**飞书服务端**，所以要调 OpenAPI 注册：
@@ -152,7 +152,7 @@ feishuQr/
 | 文件 | 改动 | 冲突风险 |
 |---|---|---|
 | `package.json` | `@larksuiteoapi/node-sdk`: `^1.59.0` → `^1.61.0` | 低（单行版本号） |
-| `bin/arc-bot.js` | USAGE 加 1 行；新增 `case 'feishu-qr'`（动态 import + try/catch） | 低（独立 case 块） |
+| `bin/arc-bot-leo.js` | USAGE 加 1 行；新增 `case 'feishu-qr'`（动态 import + try/catch） | 低（独立 case 块） |
 | `lib/setup-wizard.js` | **仅**飞书分支（原 43–50 行）：先问「扫码 / 手动」，扫码失败自动回落手动 | 中（替换了一整个 if 块） |
 
 `src/feishu.js`、`src/main.js`、`src/runners/*`、`lib/config.js` **完全没动**。
@@ -188,7 +188,7 @@ feishuQr/
 |---|---|
 | `不提供 registerApp` | SDK 版本 < 1.61.0。`npm install @larksuiteoapi/node-sdk@^1.61.0` |
 | `ENOTFOUND feishu` | `domain` 传成了简写。已修，若再出现检查是否传了自定义主机名 |
-| 二维码糊成一团 | 终端太窄。拉宽窗口，或扫 `~/.arc-bot/feishu-qr.png` |
+| 二维码糊成一团 | 终端太窄。拉宽窗口，或扫 `~/.arc-bot-leo/feishu-qr.png` |
 | 扫完码机器人不说话 | 应用没发布审批；或事件订阅不是长连接 |
 | 快捷指令面板是空的 | 缺 `application:app_slash_command:write`；补权限后跑 `--slash` |
 | 面板里只显示了一条 | 老版本 `bodyOf()` 解析 bug，升级后 `--rebuild` 一次 |
