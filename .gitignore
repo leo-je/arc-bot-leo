@@ -29,3 +29,5 @@ CLAUDE.md
 # ~/.gitignore_global 有一行 *Test.* 会误杀测试文件，这里显式放行
 !feishuCard/test/
 !feishuCard/test/**
+!test/
+!test/**
