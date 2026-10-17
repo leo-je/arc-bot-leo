@@ -2,10 +2,23 @@
   "name": "arc-bot-leo",
   "version": "1.1.7",
   "description": "ARC (AI Remote Coding) - Control AI coding agents via messaging apps",
+  "files": [
+    "bin/",
+    "lib/",
+    "src/",
+    "feishuQr/",
+    "feishuCard/",
+    "ecosystem.config.cjs",
+    ".env.example",
+    "README.md",
+    "FORK.md",
+    "DEV.md",
+    "LICENSE"
+  ],
   "type": "module",
   "main": "src/main.js",
   "bin": {
-    "arc-bot-leo": "./bin/arc-bot-leo.js"
+    "arc-bot-leo": "bin/arc-bot-leo.js"
   },
   "engines": {
     "node": ">=18"
