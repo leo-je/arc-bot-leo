@@ -37,19 +37,34 @@ jobs:
           done < <(git ls-files '*.js' '*.mjs' '*.cjs')
           [ "$fail" -eq 0 ]
 
+      # master 上还没有 feishuCard/ 之前，这些步骤没有意义。
+      # 用存在性判断，让同一个工作流在 master 和功能分支上都能绿。
       - name: 单元测试
-        run: npm test
+        run: |
+          if [ -d feishuCard/test ]; then
+            npm test
+          else
+            echo "本分支没有 feishuCard/test，跳过"
+          fi
 
       # 这三条是"装完能不能用"的最低标准：CLI 能起来、SDK 版本够、
       # 且 registerApp 真的存在（1.61.0 才引入，锁文件回退就会崩）。
       - name: CLI 冒烟
         run: |
           node bin/arc-bot.js --help > /dev/null
+          if [ ! -d feishuQr ]; then
+            echo "本分支没有 feishuQr，跳过扫码相关检查"
+            exit 0
+          fi
           node bin/arc-bot.js feishu-qr --help > /dev/null
           node -e "if (typeof require('@larksuiteoapi/node-sdk').registerApp !== 'function') { throw new Error('@larksuiteoapi/node-sdk 缺少 registerApp，需要 >= 1.61.0') }"
 
       - name: 非法参数应返回退出码 1
         run: |
+          if [ ! -d feishuQr ]; then
+            echo "本分支没有 feishuQr，跳过"
+            exit 0
+          fi
           if node bin/arc-bot.js feishu-qr --definitely-not-a-flag; then
             echo "非法参数没有返回 1"
             exit 1

@@ -34,7 +34,12 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: 单元测试
-        run: npm test
+        run: |
+          if [ -d feishuCard/test ]; then
+            npm test
+          else
+            echo "本分支没有 feishuCard/test，跳过"
+          fi
 
       # 防止 tag 和 package.json 对不上——发出去的包版本错了很难收回。
       - name: 校验 tag 与 package.json 版本一致
