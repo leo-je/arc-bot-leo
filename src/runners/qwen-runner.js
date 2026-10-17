@@ -1,6 +1,6 @@
-import { execSync } from 'child_process'
+import { execFileSync } from 'child_process'
 import { BaseRunner } from './base-runner.js'
-import { binExists } from './which.js'
+import { binExists, resolveLaunch } from './which.js'
 
 const QWEN_BIN = process.env.QWEN_BIN || 'qwen'
 
@@ -24,7 +24,8 @@ export class QwenRunner extends BaseRunner {
 
   async fetchModels() {
     try {
-      const out = execSync(`${QWEN_BIN} models`, { encoding: 'utf8', timeout: 10000 })
+      const [cmd, ...pre] = resolveLaunch(QWEN_BIN)
+      const out = execFileSync(cmd, [...pre, 'models'], { encoding: 'utf8', timeout: 10000 })
       return out.trim().split('\n').map(l => l.trim()).filter(Boolean)
     } catch {
       return []

@@ -1,5 +1,6 @@
 import { spawn } from 'child_process'
 import { createInterface } from 'readline'
+import { resolveLaunch } from './which.js'
 
 /**
  * AI Runner 抽象基类（Template Method 模式）
@@ -167,6 +168,14 @@ export class BaseRunner {
   }
 
   /**
+   * 实际执行命令与前置参数。
+   * 默认按 binPath 的文件类型决定怎么拉起（脚本走它的 shebang 解释器）。
+   */
+  launchCommand() {
+    return resolveLaunch(this.binPath)
+  }
+
+  /**
    * 核心执行逻辑（模板方法）
    * @returns {Promise<string|null>} sessionId（用于下次 resume）
    */
@@ -181,7 +190,10 @@ export class BaseRunner {
       console.log(`[${this.displayName}] 启动，cwd=${this.workDir}`)
       console.log(`[${this.displayName}] prompt="${prompt.slice(0, 80)}"`)
 
-      const child = spawn(this.binPath, args, {
+      // 脚本类 bin 要换成它的 shebang 解释器来跑，原因见 resolveLaunch 的注释
+      const [command, ...preArgs] = this.launchCommand()
+
+      const child = spawn(command, [...preArgs, ...args], {
         cwd: this.workDir,
         env,
         stdio: ['ignore', 'pipe', 'pipe'],

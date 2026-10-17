@@ -1,4 +1,4 @@
-import { accessSync, constants } from 'fs'
+import { accessSync, constants, openSync, readSync, closeSync, realpathSync } from 'fs'
 import path from 'path'
 
 /**
@@ -51,4 +51,95 @@ function isExecutable(p) {
   } catch {
     return false
   }
+}
+
+const LAUNCH_CACHE = new Map()
+
+/**
+ * 决定「怎么拉起这个命令」，返回 [command, ...前置参数]。
+ *
+ * 原生可执行文件直接跑；脚本则换成它的 shebang 解释器来跑。
+ *
+ * 起因是 Termux：`gemini` 是个 `#!/usr/bin/env node` 的脚本，而 Termux 没有
+ * `/usr/bin`，内核找不到解释器，execve 返回 ENOENT —— spawn 只会告诉你
+ * `spawn gemini ENOENT`，看起来像命令不存在，实际文件就在那儿。
+ * 这里顺手把 `/usr/bin/env X` 这一层剥掉，直接找 X（node 就用当前进程的解释器），
+ * 顺带免疫 env 缺失、PATH 被改这类环境问题。
+ */
+export function resolveLaunch(bin) {
+  if (typeof bin !== 'string' || !bin) return [bin]
+  const cached = LAUNCH_CACHE.get(bin)
+  if (cached) return cached
+  const resolved = _resolveLaunch(bin)
+  LAUNCH_CACHE.set(bin, resolved)
+  return resolved
+}
+
+function _resolveLaunch(bin) {
+  // bin 可能是裸命令名（GEMINI_BIN 默认就是 'gemini'），先按 PATH 找到实体
+  let target = bin
+  if (!path.isAbsolute(bin)) {
+    const found = findBin(bin)
+    if (found) target = found
+  }
+
+  let real
+  try {
+    real = realpathSync(target)
+  } catch {
+    // 解析不了就原样交给 spawn，让它在更靠后的位置报错
+    return [bin]
+  }
+
+  const head = readHead(real)
+  if (!head || head.length < 2) return [bin]
+  if (isNativeExecutable(head)) return [real]
+  if (head[0] !== 0x23 || head[1] !== 0x21) return [bin] // 不是 "#!"
+
+  const line = head.toString('utf8', 2).split('\n')[0].trim()
+  const parts = line.split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return [bin]
+
+  const [interp, ...interpArgs] = parts
+
+  // #!/usr/bin/env node → 解释器其实是 env 的参数
+  if (path.basename(interp) === 'env') {
+    const target = interpArgs[0]
+    if (!target) return [bin]
+    const resolvedTarget = target === 'node' ? process.execPath : findBin(target)
+    if (!resolvedTarget) return [bin]
+    return [resolvedTarget, real, ...interpArgs.slice(1)]
+  }
+
+  const resolvedInterp = isExecutable(interp) ? interp : findBin(path.basename(interp))
+  if (resolvedInterp) return [resolvedInterp, ...interpArgs, real]
+
+  return [bin]
+}
+
+function readHead(file) {
+  try {
+    const fd = openSync(file, 'r')
+    try {
+      const buf = Buffer.alloc(256)
+      const n = readSync(fd, buf, 0, buf.length, 0)
+      return buf.subarray(0, n)
+    } finally {
+      closeSync(fd)
+    }
+  } catch {
+    return null
+  }
+}
+
+function isNativeExecutable(head) {
+  if (!head || head.length < 4) return false
+  // ELF
+  if (head[0] === 0x7f && head[1] === 0x45 && head[2] === 0x4c && head[3] === 0x46) return true
+  // PE (MZ)
+  if (head[0] === 0x4d && head[1] === 0x5a) return true
+  // Mach-O：32/64 位、大小端、以及 fat binary
+  const magic = head.readUInt32BE(0)
+  return magic === 0xfeedface || magic === 0xfeedfacf || magic === 0xcafebabe ||
+    magic === 0xcffaedfe || magic === 0xcefaedfe
 }

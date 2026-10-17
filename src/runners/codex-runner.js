@@ -1,6 +1,6 @@
-import { execSync } from 'child_process'
+import { execFileSync } from 'child_process'
 import { BaseRunner } from './base-runner.js'
-import { binExists } from './which.js'
+import { binExists, resolveLaunch } from './which.js'
 
 const CODEX_BIN = process.env.CODEX_BIN || 'codex'
 
@@ -37,7 +37,8 @@ export class CodexRunner extends BaseRunner {
 
   async fetchModels() {
     try {
-      const out = execSync(`${CODEX_BIN} models`, { encoding: 'utf8', timeout: 10000 })
+      const [cmd, ...pre] = resolveLaunch(CODEX_BIN)
+      const out = execFileSync(cmd, [...pre, 'models'], { encoding: 'utf8', timeout: 10000 })
       return out.trim().split('\n').map(l => l.trim()).filter(Boolean)
     } catch {
       return []

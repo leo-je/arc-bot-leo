@@ -1,6 +1,6 @@
-import { execSync } from 'child_process'
+import { execFileSync } from 'child_process'
 import { BaseRunner } from './base-runner.js'
-import { binExists } from './which.js'
+import { binExists, resolveLaunch } from './which.js'
 
 const GEMINI_BIN = process.env.GEMINI_BIN || 'gemini'
 
@@ -30,7 +30,8 @@ export class GeminiRunner extends BaseRunner {
 
   async fetchModels() {
     try {
-      const out = execSync(`${GEMINI_BIN} models`, { encoding: 'utf8', timeout: 10000 })
+      const [cmd, ...pre] = resolveLaunch(GEMINI_BIN)
+      const out = execFileSync(cmd, [...pre, 'models'], { encoding: 'utf8', timeout: 10000 })
       return out.trim().split('\n').map(l => l.trim()).filter(Boolean)
     } catch {
       return []
