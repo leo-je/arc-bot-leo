@@ -14,12 +14,56 @@
 
 | 步骤 | 调用 | 说明 |
 |---|---|---|
-| 1 | `cardkit.v1.card.create` | 建卡片实体，`streaming_mode: true` |
+| 1 | `cardkit.v1.card.create` | 建卡片实体，`streaming_mode: true`；开了过程面板时body里多一个 `collapsible_panel` |
 | 2 | `im.v1.message.create` | 以 `msg_type: 'interactive'` 发出引用该卡片的消息 |
-| 3 | `cardkit.v1.cardElement.content` | 反复推送**当前完整文本**，`sequence` 自增 |
-| 4 | `cardkit.v1.card.settings` | `streaming_mode: false`，收尾 |
+| 3 | `cardkit.v1.cardElement.content` | 反复推送**当前完整文本**，`sequence` 自增；正文（`stream_md`）和过程面板（`stream_tools`）各推各的 |
+| 4 | `cardkit.v1.cardElement.patch` | 收尾时把过程面板的 `expanded` 改成 `false`，让它自动收起 |
+| 5 | `cardkit.v1.card.settings` | `streaming_mode: false`，收尾 |
 
 第 3 步推的是全量，不是增量。飞书客户端按 `streaming_config` 里的 `print_frequency_ms` / `print_step` 自己做逐字打印，服务端没必要算差量——这也是敢用 300ms 节流的原因。
+
+## 执行过程面板
+
+工具调用（`onToolUse`）不进正文，进卡片顶部一个可折叠的 `collapsible_panel`：
+
+```
+┌─────────────────────────┐
+│ 🛠️ 执行过程          ⌄  │  ← 运行中展开、结束后自动收起
+│ - ✅ 读取文件: a.js      │
+│ - ✅ 执行命令: npm test  │
+├─────────────────────────┤
+│ ## 回答正文（Markdown） │
+└─────────────────────────┘
+```
+
+三个设计决策，都是被实测逼出来的：
+
+1. **面板里嵌一个独立的 markdown 元素**（`stream_tools`），而不是把过程拼进正文。因为 `cardElement.content` 是按 `element_id` 定位组件的，只有独立元素才能单独流式更新而不影响正文长度。
+2. **面板自己也要有 `element_id`**（`stream_tools_panel`）。实测 `cardElement.patch` 改 `expanded` 必须打在面板本体上；打在它的子 markdown 上会报 `300313 unknown property, property: expanded`。
+3. **正文预算要扣掉面板占用**。卡片总量是固定的，正文可用字符数 = `MAX_CARD_CHARS - 面板文本长度`（下限 4000），否则两边一起涨会超出容量。
+
+面板的其他行为：
+
+- 最多留 120 条记录，超出丢最老的（最新的动作一定要能看到）。
+- 连续重复的动作压成一条并标 `×N`，否则同一个命令重跑几次就刷屏了。
+- 收尾必须**先** patch 收起面板、**再**关流式模式。顺序反了组件接口直接报 `300309 streaming mode is closed`。
+
+## 命令：动态切换展示模式与后端
+
+`src/feishu.js` 里两个命令，都是即时生效、只影响当前会话：
+
+| 命令 | 作用 |
+|---|---|
+| `/steps` | 查看当前模式 |
+| `/steps card` | 默认。过程收进卡片折叠面板，运行中展开、结束后收起 |
+| `/steps text` | 旧行为，每条工具调用发一条 `🔧 …` 独立消息 |
+| `/steps off` | 完全不展示过程，只看结果 |
+| `/ai` | 弹后端菜单 |
+| `/ai gemini` | 直接切到 gemini，按 key 或显示名匹配，不区分大小写 |
+
+`/ai <名称>` 切换后会清掉 `claudeSessionMap`——resume id 是后端私有的，不清会被新后端拿去 resume 一个不存在的会话。
+
+模式存在内存里（和 `chatBackendMap` 一致），进程重启就回默认值 `card`。
 
 ## 文件
 

@@ -8,6 +8,20 @@
 /** 流式卡片里承载正文的组件 id。更新接口靠它定位组件，改名要同步改 stream.js。 */
 export const STREAM_ELEMENT_ID = 'stream_md'
 
+/** 折叠面板里承载「执行过程」文字的组件 id。 */
+export const TOOLS_ELEMENT_ID = 'stream_tools'
+
+/**
+ * 折叠面板本身的组件 id。
+ *
+ * 要单独给面板一个 id：实测 cardElement.patch 改 `expanded` 时必须打在
+ * 面板自己身上，打在它的子 markdown 上会报 300313 unknown property。
+ */
+export const TOOLS_PANEL_ID = 'stream_tools_panel'
+
+/** 执行过程面板的默认标题。 */
+export const DEFAULT_TOOLS_TITLE = '🛠️ 执行过程'
+
 /**
  * 卡片消息体上限 30 KB；中文按 UTF-8 一字 3 字节算，再加上 JSON 转义膨胀，
  * 28000 字符是比较安全的余量。
@@ -39,12 +53,61 @@ export function summaryOf(text) {
 }
 
 /**
+ * 执行过程面板：一个折叠块，展开时看到工具调用流水。
+ *
+ * 为什么用 collapsible_panel 而不是把过程直接拼进正文：
+ * ① 面板里的 markdown 是一个独立 element，可以单独走 cardElement.content 流式更新，
+ *    不受正文长度影响（实测面板内嵌 markdown 更新正常）；
+ * ② 收尾时能用 cardElement.patch 把 expanded 改回 false，让过程自动收起，
+ *    正文重新成为卡片的视觉主体。
+ */
+export function toolsPanel({
+  title = DEFAULT_TOOLS_TITLE,
+  content = '',
+  expanded = true,
+  elementId = TOOLS_ELEMENT_ID,
+  panelId = TOOLS_PANEL_ID,
+} = {}) {
+  return {
+    tag: 'collapsible_panel',
+    element_id: panelId,
+    expanded: Boolean(expanded),
+    background_color: 'grey-50',
+    border: { color: 'grey', corner_radius: '8px' },
+    padding: '8px',
+    header: {
+      title: { tag: 'plain_text', content: title },
+      vertical_align: 'center',
+      padding: '8px',
+      icon: {
+        tag: 'standard_icon',
+        token: 'down-small-ccm_outlined',
+        color: 'grey',
+        size: '16px 16px',
+      },
+      icon_position: 'right',
+      icon_expanded_angle: -180,
+    },
+    elements: [{ tag: 'markdown', element_id: elementId, content: content || '（暂无）' }],
+  }
+}
+
+/**
  * 构造流式卡片。
  *
  * streaming_config 交给客户端自己做逐字打印，服务端只要推"当前完整文本"即可，
  * 不需要算增量——这也是我们敢用 300ms 节流的原因。
+ *
+ * 第二个参数兼容老的 `streamingCard(text, elementId)` 调用形式。
  */
-export function streamingCard(initialText = DEFAULT_INITIAL_TEXT, elementId = STREAM_ELEMENT_ID) {
+export function streamingCard(initialText = DEFAULT_INITIAL_TEXT, options = {}) {
+  const { elementId = STREAM_ELEMENT_ID, tools = null } =
+    typeof options === 'string' ? { elementId: options } : options
+
+  const elements = []
+  if (tools) elements.push(toolsPanel(tools))
+  elements.push({ tag: 'markdown', element_id: elementId, content: initialText })
+
   return {
     schema: '2.0',
     config: {
@@ -56,9 +119,7 @@ export function streamingCard(initialText = DEFAULT_INITIAL_TEXT, elementId = ST
         print_strategy: 'fast',
       },
     },
-    body: {
-      elements: [{ tag: 'markdown', element_id: elementId, content: initialText }],
-    },
+    body: { elements },
   }
 }
 
