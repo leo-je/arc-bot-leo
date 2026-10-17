@@ -9,6 +9,7 @@ import {
 import { getRunner, RUNNERS, getAvailableRunners } from './runners/index.js'
 import { takeScreenshot } from './screenshot-helper.js'
 import { startTunnel, stopTunnel, getTunnelUrl, detectProjectPort } from './tunnel-helper.js'
+import { CardStream } from '../feishuCard/index.js'
 
 const execAsync = promisify(exec)
 
@@ -344,6 +345,16 @@ async function handleTask(chatId, userMessage) {
 
     await sendText(chatId, `⏳ [${backendLabel}] 正在处理：${userMessage.slice(0, 100)}...`)
 
+    // 回答用卡片渲染（原生支持 Markdown）。建卡失败就退回纯文本，不能让任务挂掉
+    let card = null
+    try {
+      card = new CardStream({ client, chatId })
+      await card.start()
+    } catch (err) {
+      console.error('[飞书] 卡片创建失败，降级为纯文本:', err.message)
+      card = null
+    }
+
     try {
       const newSessionId = await runner.run({
         prompt: userMessage,
@@ -351,6 +362,7 @@ async function handleTask(chatId, userMessage) {
         resumeSessionId,
         model: chatModelMap.get(chatId) || null,
         onOutput: async (text) => {
+          if (card) return card.append(text)
           try { await sendText(chatId, text) } catch (err) { console.error('[飞书] 发送消息失败:', err.message) }
         },
         onToolUse: async (label) => {
@@ -361,15 +373,21 @@ async function handleTask(chatId, userMessage) {
       if (newSessionId) claudeSessionMap.set(chatId, newSessionId)
 
       const remaining = sessionManager.pendingCount(chatId)
-      const doneText = remaining > 0 ? `✅ 任务完成（队列中还有 ${remaining} 个任务）` : '✅ 任务完成'
-      await sendText(chatId, doneText)
+      if (card) {
+        await card.finish()
+        if (remaining > 0) await sendText(chatId, `✅ 任务完成（队列中还有 ${remaining} 个任务）`)
+      } else {
+        const doneText = remaining > 0 ? `✅ 任务完成（队列中还有 ${remaining} 个任务）` : '✅ 任务完成'
+        await sendText(chatId, doneText)
+      }
     } catch (err) {
       claudeSessionMap.delete(chatId)
-      if (err.message === 'ABORTED') {
-        await sendText(chatId, '⛔ 任务已中止')
+      const aborted = err.message === 'ABORTED'
+      if (!aborted) console.error('[飞书] 执行错误:', err)
+      if (card) {
+        await card.fail(aborted ? new Error('任务已中止') : err).catch(() => {})
       } else {
-        console.error('[飞书] 执行错误:', err)
-        await sendText(chatId, `❌ 执行失败：${err.message}`)
+        await sendText(chatId, aborted ? '⛔ 任务已中止' : `❌ 执行失败：${err.message}`)
       }
     }
   }).catch(() => {})
