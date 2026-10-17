@@ -1,13 +1,8 @@
-import { existsSync } from 'fs'
 import { execSync } from 'child_process'
 import { BaseRunner } from './base-runner.js'
+import { binExists } from './which.js'
 
 const GEMINI_BIN = process.env.GEMINI_BIN || 'gemini'
-
-function _binExists(bin) {
-  if (bin.startsWith('/') || bin.startsWith('./')) return existsSync(bin)
-  try { execSync(`which ${bin}`, { stdio: 'ignore' }); return true } catch { return false }
-}
 
 /**
  * Gemini CLI Runner
@@ -27,7 +22,7 @@ function _binExists(bin) {
  * - --resume 用 session_id（UUID 格式），实测有效
  */
 export class GeminiRunner extends BaseRunner {
-  static isAvailable() { return _binExists(GEMINI_BIN) }
+  static isAvailable() { return binExists(GEMINI_BIN) }
 
   get displayName() { return 'Gemini CLI' }
 

@@ -1,13 +1,8 @@
-import { existsSync } from 'fs'
 import { execSync } from 'child_process'
 import { BaseRunner } from './base-runner.js'
+import { binExists } from './which.js'
 
 const CODEX_BIN = process.env.CODEX_BIN || 'codex'
-
-function _binExists(bin) {
-  if (bin.startsWith('/') || bin.startsWith('./')) return existsSync(bin)
-  try { execSync(`which ${bin}`, { stdio: 'ignore' }); return true } catch { return false }
-}
 
 /**
  * Codex CLI Runner（OpenAI Codex）
@@ -34,7 +29,7 @@ function _binExists(bin) {
  * 如遇到格式不匹配，查看 pm2 日志中的 [Codex CLI stderr] 输出调整。
  */
 export class CodexRunner extends BaseRunner {
-  static isAvailable() { return _binExists(CODEX_BIN) }
+  static isAvailable() { return binExists(CODEX_BIN) }
 
   get displayName() { return 'Codex CLI' }
 

@@ -1,6 +1,7 @@
 import { realpathSync, existsSync, openSync, readSync, closeSync } from 'fs'
-import { execSync, execFileSync } from 'child_process'
+import { execFileSync } from 'child_process'
 import { BaseRunner } from './base-runner.js'
+import { findBin, binExists } from './which.js'
 
 const NODE_BIN = realpathSync(process.execPath)
 
@@ -14,11 +15,9 @@ const CLAUDE_CANDIDATES = [
 
 function _findClaudeBin() {
   if (process.env.CLAUDE_BIN) return process.env.CLAUDE_BIN
-  try {
-    const found = execSync('which claude', { encoding: 'utf8' }).trim()
-    if (found) return found
-  } catch {}
-  // pm2 的 PATH 常常比登录 shell 窄：`which` 找不到，但文件其实在。
+  const found = findBin('claude')
+  if (found) return found
+  // pm2 的 PATH 常常比登录 shell 窄：PATH 里找不到，但文件其实在。
   return CLAUDE_CANDIDATES.find((p) => p && existsSync(p)) || 'claude'
 }
 const CLAUDE_BIN = _findClaudeBin()
@@ -71,7 +70,7 @@ const SYSTEM_PROMPT = '重要：如果需要启动长期运行的服务（如 np
 
 export class ClaudeRunner extends BaseRunner {
   static isAvailable() {
-    return existsSync(CLAUDE_BIN) || (() => { try { execSync(`which ${CLAUDE_BIN}`, { stdio: 'ignore' }); return true } catch { return false } })()
+    return binExists(CLAUDE_BIN)
   }
 
   get displayName() { return 'Claude Code' }

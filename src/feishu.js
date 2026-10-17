@@ -1,5 +1,6 @@
 import { exec } from 'child_process'
 import { promisify } from 'util'
+import path from 'path'
 import {
   sessionManager,
   currentWorkDir, setCurrentWorkDir,
@@ -83,6 +84,28 @@ function getStepMode(chatId) {
 }
 
 // ─── 文字菜单构建 ─────────────────────────────────────────
+/**
+ * 可用后端清单；一个都没有时给出可执行的排查信息，而不是一个空白列表。
+ * 后端探测只看 PATH，所以这里把 PATH 原样打出来——pm2 的 PATH 比登录 shell
+ * 窄是这个问题的头号原因。
+ */
+function describeAvailableRunners() {
+  const entries = getAvailableRunners()
+  if (entries.length > 0) {
+    return entries.map(([key, { label, emoji }]) => `${emoji} ${key}（${label}）`).join('\n')
+  }
+  const dirs = (process.env.PATH || '').split(path.delimiter).filter(Boolean)
+  return [
+    '未检测到任何可用的后端（claude / gemini / qwen / codex 都不在 PATH 里）。',
+    '',
+    `当前 PATH（${dirs.length} 项）：`,
+    ...dirs.map((d) => `  ${d}`),
+    '',
+    '若终端里能跑、这里却不行，多半是 pm2 的 PATH 比登录 shell 窄，试试：',
+    '  pm2 restart arc-bot-leo --update-env',
+  ].join('\n')
+}
+
 function buildAiMenuText(chatId) {
   const currentBackend = getBackendName(chatId)
   const currentLabel = RUNNERS[currentBackend]?.label || currentBackend
@@ -90,6 +113,7 @@ function buildAiMenuText(chatId) {
     const isCurrent = key === currentBackend
     return `${i + 1}. ${isCurrent ? '✅ ' : ''}${emoji} ${label}`
   })
+  if (lines.length === 0) return describeAvailableRunners()
   return `请选择 AI 后端：\n\n${lines.join('\n')}\n\n回复序号即可切换（当前：${currentLabel}）`
 }
 
@@ -127,8 +151,8 @@ async function handleCommand(chatId, openId, text) {
   }
 
   if (text === '/ai') {
-    if (Object.keys(RUNNERS).length === 0) {
-      await sendText(chatId, '未配置任何 AI 后端。')
+    if (getAvailableRunners().length === 0) {
+      await sendText(chatId, describeAvailableRunners())
       return
     }
     pendingMenuMap.set(chatId, { type: 'ai', timestamp: Date.now() })
@@ -145,8 +169,7 @@ async function handleCommand(chatId, openId, text) {
       ([key, { label }]) => key.toLowerCase() === wanted || String(label || '').toLowerCase() === wanted,
     )
     if (!found) {
-      const names = entries.map(([key, { label, emoji }]) => `${emoji} ${key}（${label}）`).join('\n')
-      await sendText(chatId, `没有叫「${aiSwitch[1]}」的后端。\n\n可用：\n${names}\n\n发 /ai 可以看菜单`)
+      await sendText(chatId, `没有叫「${aiSwitch[1]}」的后端。\n\n可用：\n${describeAvailableRunners()}\n\n发 /ai 可以看菜单`)
       return
     }
     const [key, { label, emoji }] = found
