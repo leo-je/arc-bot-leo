@@ -14,7 +14,7 @@ import readline from 'node:readline/promises'
 import { stdin, stdout } from 'node:process'
 import { CONFIG_FILE, readEnv, writeEnv } from '../lib/config.js'
 import { provisionFeishuBot, DEFAULT_APP_NAME, DEFAULT_APP_DESC } from './provision.js'
-import { registerSlashCommands } from './slash-commands.js'
+import { registerSlashCommands, rebuildSlashCommands } from './slash-commands.js'
 import { resolveAvatarUrl, describeAvatarSupport } from './avatar.js'
 
 const USAGE = `Usage: arc-bot feishu-qr [options]
@@ -28,6 +28,8 @@ Options:
   --avatar <URL>       应用头像（公网图片 URL，或 builtin 用仓库内置图）
   --no-avatar          不设置头像（默认行为）
   --domain <域名>      feishu（默认）或 lark（Lark 国际版）
+  --slash              只重同步 "/" 快捷指令（用已有凭据，不扫码、不改配置）
+  --rebuild            删掉全部 "/" 快捷指令再按清单顺序重建
   --skip-slash         跳过 "/" 快捷指令注册
   --force              已配置飞书时也强制重新扫码（会覆盖旧凭据）
   -h, --help           显示本帮助
@@ -41,6 +43,8 @@ function parseArgs(argv) {
     desc: DEFAULT_APP_DESC,
     avatar: undefined,
     domain: 'feishu',
+    slashOnly: false,
+    rebuild: false,
     skipSlash: false,
     force: false,
     help: false,
@@ -59,6 +63,8 @@ function parseArgs(argv) {
       case '--avatar': opts.avatar = next(); break
       case '--no-avatar': opts.avatar = undefined; break
       case '--domain': opts.domain = next(); break
+      case '--slash': opts.slashOnly = true; break
+      case '--rebuild': opts.rebuild = true; break
       case '--skip-slash': opts.skipSlash = true; break
       case '--force': opts.force = true; break
       case '-h':
@@ -83,6 +89,20 @@ async function confirm(question) {
   }
 }
 
+/** 统一打印 "/" 快捷指令的注册结果。 */
+function reportSlash(slash) {
+  if (slash.ok) {
+    const parts = []
+    if (slash.created.length) parts.push(`新建 ${slash.created.map((c) => `/${c}`).join('、')}`)
+    if (slash.skipped.length) parts.push(`已存在 ${slash.skipped.map((c) => `/${c}`).join('、')}`)
+    if (slash.failed?.length) parts.push(`失败 ${slash.failed.map((f) => `/${f.command}`).join('、')}`)
+    console.log(`✅ 快捷指令就绪${parts.length ? `（${parts.join('，')}）` : ''}`)
+    return
+  }
+  console.warn(`⚠️  快捷指令未注册：${slash.error}`)
+  console.warn('   不影响收发消息；补好权限后重跑 `arc-bot feishu-qr --slash` 即可。')
+}
+
 /**
  * 主入口。失败时抛错，由调用方决定退出码。
  * @returns {Promise<{appId:string, skipped:boolean}>}
@@ -93,6 +113,23 @@ export async function runFeishuQrSetup(argv = []) {
   if (opts.help) {
     console.log(USAGE)
     return { appId: '', skipped: true }
+  }
+
+  // ── 0. `--slash` / `--rebuild`：只动 "/" 面板，不扫码、不改凭据 ────
+  if (opts.slashOnly || opts.rebuild) {
+    const env = readEnv()
+    if (!env.FEISHU_APP_ID || !env.FEISHU_APP_SECRET) {
+      throw new Error('还没有配置飞书应用，先运行 `arc-bot feishu-qr` 扫码创建。')
+    }
+    console.log(`正在为 ${env.FEISHU_APP_ID} ${opts.rebuild ? '重建' : '同步'} "/" 快捷指令…`)
+    const slash = await (opts.rebuild ? rebuildSlashCommands : registerSlashCommands)({
+      appId: env.FEISHU_APP_ID,
+      appSecret: env.FEISHU_APP_SECRET,
+      domain: opts.domain,
+      log: (msg) => console.log(`   ${msg}`),
+    })
+    reportSlash(slash)
+    return { appId: env.FEISHU_APP_ID, skipped: false }
   }
 
   // ── 1. 已配置保护 ──────────────────────────────────────
@@ -139,15 +176,7 @@ export async function runFeishuQrSetup(argv = []) {
         domain: result.domain,
         log: (msg) => console.log(`   ${msg}`),
       })
-      if (slash.ok) {
-        const parts = []
-        if (slash.created.length) parts.push(`新建 ${slash.created.map((c) => `/${c}`).join('、')}`)
-        if (slash.skipped.length) parts.push(`已存在 ${slash.skipped.map((c) => `/${c}`).join('、')}`)
-        console.log(`✅ 快捷指令就绪${parts.length ? `（${parts.join('，')}）` : ''}`)
-      } else {
-        console.warn(`⚠️  快捷指令未注册：${slash.error}`)
-        console.warn('   不影响收发消息；补好权限后重跑 `arc-bot feishu-qr --force` 即可。')
-      }
+      reportSlash(slash)
     } catch (err) {
       console.warn(`⚠️  快捷指令注册异常：${err.message}`)
     }

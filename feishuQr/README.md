@@ -96,8 +96,10 @@ node feishuQr/assets/make-avatar.mjs
 ### 3.3 "/" 快捷指令
 
 ```bash
-npx arc-bot feishu-qr            # 默认注册
+npx arc-bot feishu-qr            # 扫码建应用时顺手注册
 npx arc-bot feishu-qr --skip-slash   # 跳过
+npx arc-bot feishu-qr --slash        # 只同步：补缺的，不动已有凭据（改完清单跑这个）
+npx arc-bot feishu-qr --rebuild      # 全删再按顺序重建（只有它能把面板顺序摆正）
 ```
 
 - 面板由**飞书客户端**渲染，命令清单存在**飞书服务端**，所以要调 OpenAPI 注册：
@@ -108,11 +110,19 @@ npx arc-bot feishu-qr --skip-slash   # 跳过
   所以 `src/feishu.js` 里的命令解析**一行都不用改**——这是这套方案最省事的地方。
 - 幂等：已存在的跳过，只补缺的。缺权限时**不中断**，只提示，因为收发消息不受影响。
 
-当前只注册了 `/clear`。要加 `/status`、`/stop` 等，改
-[`slash-commands.js`](./slash-commands.js) 的 `SLASH_COMMANDS` 数组加一行即可。
+注册的是 ARC 已有的全部命令，共 12 条，和 `src/feishu.js` 的 `handleCommand()` 一一对应：
 
-> 面板按**创建时间倒序**展示，同秒创建顺序不确定。要控顺序就一条条建、每条间隔 1.1 秒
-> （常量 `SLASH_PANEL_CREATE_INTERVAL_MS` 已留好）。
+`/ai` `/model` `/steps` `/clear` `/stop` `/status` `/projects` `/cd` `/test` `/screenshot` `/tunnel` `/help`
+
+加命令就是往 [`slash-commands.js`](./slash-commands.js) 的 `SLASH_COMMANDS` 数组加一行，然后跑 `--slash`。
+
+> 面板按**创建时间倒序**展示，同秒创建顺序不确定。所以创建时每条间隔 1.1 秒
+> （常量 `SLASH_PANEL_CREATE_INTERVAL_MS`），并且 `--rebuild` 是**倒着**建清单，
+> 最终展示顺序才和 `SLASH_COMMANDS` 一致。
+
+**踩过的坑**：`client.request()` 实测直接返回业务体 `{code, data, msg}`，不是 axios
+response。早先按 axios 的 `.data` 去解，拿到 `{items}` 再取 `.data.items` 永远是空，
+导致每条命令都被当成"没注册"——表现出来就是面板里只有一条 `clear`。已在 `bodyOf()` 里兜住两种形态。
 
 ---
 
@@ -155,7 +165,7 @@ feishuQr/
 |---|---|---|
 | 扫码创建 | `registerApp` + `RegistrationManager` 状态机 + 多 bot 管理 | 直接用 `registerApp`，单 bot，不引状态机 |
 | 应用头像 | **没有实现**（全仓无相关代码，`avatarUrl` 只是消息发送者头像透传） | 按 SDK 的 `appPreset.avatar` 能力**新实现** |
-| "/" 快捷指令 | `slash-command-panel.mjs` + `slash-command-registry.mjs`，支持 100 条 + 自定义面板 | 只注册 `/clear`，复用 ARC 已有的命令解析 |
+| "/" 快捷指令 | `slash-command-panel.mjs` + `slash-command-registry.mjs`，支持 100 条 + 自定义面板 | 注册 ARC 全部 12 条命令，纯文本回传，复用 ARC 已有的解析 |
 
 也就是说：**头像这块不是「参考 dsh-im」，而是 dsh-im 里根本没有**。这里如实标注，免得后人对错账。
 
@@ -180,7 +190,9 @@ feishuQr/
 | `ENOTFOUND feishu` | `domain` 传成了简写。已修，若再出现检查是否传了自定义主机名 |
 | 二维码糊成一团 | 终端太窄。拉宽窗口，或扫 `~/.arc-bot/feishu-qr.png` |
 | 扫完码机器人不说话 | 应用没发布审批；或事件订阅不是长连接 |
-| 快捷指令面板是空的 | 缺 `application:app_slash_command:write`；补权限后 `--force` 重跑 |
+| 快捷指令面板是空的 | 缺 `application:app_slash_command:write`；补权限后跑 `--slash` |
+| 面板里只显示了一条 | 老版本 `bodyOf()` 解析 bug，升级后 `--rebuild` 一次 |
+| 面板顺序不对 | 面板按创建时间倒序，用 `--rebuild` 重置 |
 | 头像不显示 | URL 不是公网可达，或飞书服务器访问不了该域名 |
 
 ---
@@ -192,8 +204,8 @@ feishuQr/
 | `begin` 请求 + 二维码生成 + PNG 有效 | ✅ 已实测（真实请求 accounts.feishu.cn） |
 | 终端二维码列宽自适应、非 TTY 不画码 | ✅ 已实测 |
 | 参数校验（非法 domain / avatar / 未知参数）| ✅ 已实测，退出码 1 |
-| **扫码成功后拿到 client_id/secret** | ❌ 未实测（需真人扫码） |
-| **"/" 快捷指令真实注册** | ❌ 未实测（需真实 app 凭据） |
-| **`appPreset.avatar` 真实生效** | ❌ 未实测（需公网图床） |
+| **扫码成功后拿到 client_id/secret** | ✅ 已实测（真实扫码建出 `cli_aa59...`，收发消息正常） |
+| **"/" 快捷指令真实注册** | ✅ 已实测（12 条全部注册成功，删除/重建接口也验证过） |
+| **`appPreset.avatar` 真实生效** | ❌ 未实测（需公网图床，默认不启用） |
 
-未实测的三项都需要一个真实的飞书企业账号和一个已发布的 app，无法在 CI 里覆盖。
+头像那项需要公网可达的图片 URL，本地无从验证，所以默认关着。
