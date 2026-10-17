@@ -1,0 +1,107 @@
+name: Release
+
+# 两种触发方式：
+#   1. 推 tag    v1.1.6        → 打包 + 建 GitHub Release（附 tgz）
+#   2. 推分支    release/xxx   → 只打包 + 上传 artifact，不建 Release（没有 tag 建不了）
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - 'release/**'
+
+# gh release create 需要写权限
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: 单元测试
+        run: |
+          if [ -d feishuCard/test ]; then
+            npm test
+          else
+            echo "本分支没有 feishuCard/test，跳过"
+          fi
+
+      # 防止 tag 和 package.json 对不上——发出去的包版本错了很难收回。
+      - name: 校验 tag 与 package.json 版本一致
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "tag v$tag 与 package.json 的 $pkg 不一致"
+            exit 1
+          fi
+          echo "版本一致：$pkg"
+
+      - name: 打包
+        id: pack
+        run: |
+          npm pack --silent > /dev/null
+          file="$(ls -1 arc-bot-*.tgz | head -1)"
+          if [ -z "$file" ]; then
+            echo "npm pack 没有产出 tgz"
+            exit 1
+          fi
+          echo "file=$file" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(sha256sum "$file" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "打包完成：$file"
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.pack.outputs.file }}
+          path: ${{ steps.pack.outputs.file }}
+          if-no-files-found: error
+
+      - name: 创建 GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 已存在就先传文件，重跑同一个 tag 不会红
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${{ steps.pack.outputs.file }}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${{ steps.pack.outputs.file }}" \
+              --title "$GITHUB_REF_NAME" \
+              --generate-notes
+          fi
+
+      - name: 分支触发的提示
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        run: |
+          {
+            echo "### release 分支构建完成"
+            echo ""
+            echo "- 产物：\`${{ steps.pack.outputs.file }}\`"
+            echo "- sha256：\`${{ steps.pack.outputs.sha256 }}\`"
+            echo ""
+            echo "要正式发布（生成 Release），推一个与 package.json 版本一致的 tag："
+            echo ""
+            echo '```bash'
+            echo "git tag v\$(node -p \"require('./package.json').version\")"
+            echo "git push origin --tags"
+            echo '```'
+            echo ""
+            echo "npm 上架仍是手动：\`npm publish ./${{ steps.pack.outputs.file }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
