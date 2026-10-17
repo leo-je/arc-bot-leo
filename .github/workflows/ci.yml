@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20.x', '22.x']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      # --ignore-scripts：@whiskeysockets/baileys 的 preinstall 与本项目检查无关，
+      # 跳过能省时间，也避免它因为环境问题挡住 CI。
+      - name: 安装依赖
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: 语法检查（全量）
+        run: |
+          fail=0
+          while IFS= read -r f; do
+            node --check "$f" || fail=1
+          done < <(git ls-files '*.js' '*.mjs' '*.cjs')
+          [ "$fail" -eq 0 ]
+
+      - name: 单元测试
+        run: npm test
+
+      # 这三条是"装完能不能用"的最低标准：CLI 能起来、SDK 版本够、
+      # 且 registerApp 真的存在（1.61.0 才引入，锁文件回退就会崩）。
+      - name: CLI 冒烟
+        run: |
+          node bin/arc-bot.js --help > /dev/null
+          node bin/arc-bot.js feishu-qr --help > /dev/null
+          node -e "if (typeof require('@larksuiteoapi/node-sdk').registerApp !== 'function') { throw new Error('@larksuiteoapi/node-sdk 缺少 registerApp，需要 >= 1.61.0') }"
+
+      - name: 非法参数应返回退出码 1
+        run: |
+          if node bin/arc-bot.js feishu-qr --definitely-not-a-flag; then
+            echo "非法参数没有返回 1"
+            exit 1
+          fi
