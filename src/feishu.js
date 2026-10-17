@@ -4,7 +4,7 @@ import path from 'path'
 import {
   sessionManager,
   currentWorkDir, setCurrentWorkDir,
-  chatBackendMap, chatModelMap, claudeSessionMap,
+  chatBackendMap, chatModelMap, claudeSessionMap, stepModeMap,
   projects, defaultBackend,
 } from './state.js'
 import { getRunner, RUNNERS, getAvailableRunners } from './runners/index.js'
@@ -77,7 +77,7 @@ const STEP_MODES = {
   off: '不展示',
 }
 const DEFAULT_STEP_MODE = 'card'
-const stepModeMap = new Map()
+// stepModeMap 定义在 state.js 里，跟着 chatBackendMap 一起落盘
 
 function getStepMode(chatId) {
   return stepModeMap.get(chatId) || DEFAULT_STEP_MODE
