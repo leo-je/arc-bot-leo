@@ -29,6 +29,8 @@ jobs:
         with:
           node-version: '20.x'
           cache: npm
+          # 让 setup-node 生成 .npmrc：//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}
+          registry-url: 'https://registry.npmjs.org'
 
       - name: 安装依赖
         run: npm ci --ignore-scripts --no-audit --no-fund
@@ -96,12 +98,30 @@ jobs:
             echo "- 产物：\`${{ steps.pack.outputs.file }}\`"
             echo "- sha256：\`${{ steps.pack.outputs.sha256 }}\`"
             echo ""
-            echo "要正式发布（生成 Release），推一个与 package.json 版本一致的 tag："
+            echo "要正式发布（生成 Release 并上架 npm），推一个与 package.json 版本一致的 tag："
             echo ""
             echo '```bash'
             echo "git tag v\$(node -p \"require('./package.json').version\")"
             echo "git push origin --tags"
             echo '```'
-            echo ""
-            echo "npm 上架仍是手动：\`npm publish ./${{ steps.pack.outputs.file }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # 配了 NPM_TOKEN 才会执行；没配就跳过，不会把流水线跑红。
+      - name: 发布到 npm
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "未配置 NPM_TOKEN，跳过 npm 发布"
+            exit 0
+          fi
+
+          ver="$(node -p "require('./package.json').version")"
+          if npm view "arc-bot-leo@$ver" version --registry=https://registry.npmjs.org > /dev/null 2>&1; then
+            echo "npm 上已存在 arc-bot-leo@$ver，跳过发布"
+            exit 0
+          fi
+
+          npm publish --registry=https://registry.npmjs.org
+          echo "已发布 arc-bot-leo@$ver"
