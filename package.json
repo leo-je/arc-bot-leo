@@ -18,7 +18,7 @@
     "pm2:restart": "pm2 restart arc",
     "pm2:logs": "pm2 logs arc",
     "pm2:status": "pm2 status",
-    "test": "node --test feishuCard/test/"
+    "test": "node --test feishuCard/test/*.test.mjs"
   },
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.61.0",
