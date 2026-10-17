@@ -12,6 +12,7 @@ Commands:
   restart  Restart the bot
   logs     Show logs
   status   Show process status
+  feishu-qr  扫码创建飞书机器人（自动写入配置，见 feishuQr/README.md）
 
   --help, -h  Show this help message
 `
@@ -53,6 +54,18 @@ switch (cmd) {
   case 'status':
     status()
     break
+
+  case 'feishu-qr': {
+    // 动态 import：不扫码的用户不为 feishuQr/ 付出加载代价，也减少与上游的冲突面
+    try {
+      const { runFeishuQrSetup } = await import('../feishuQr/index.js')
+      await runFeishuQrSetup(process.argv.slice(3))
+    } catch (err) {
+      console.error(`\n❌ ${err.message}\n`)
+      process.exit(1)
+    }
+    break
+  }
 
   default:
     console.error(`Unknown command: ${cmd}\n`)

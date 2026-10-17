@@ -9,6 +9,7 @@ import {
 import { getRunner, RUNNERS, getAvailableRunners } from './runners/index.js'
 import { takeScreenshot } from './screenshot-helper.js'
 import { startTunnel, stopTunnel, getTunnelUrl, detectProjectPort } from './tunnel-helper.js'
+import { CardStream } from '../feishuCard/index.js'
 
 const execAsync = promisify(exec)
 
@@ -65,6 +66,22 @@ async function autoDetectBuildCmd(cwd) {
 const pendingMenuMap = new Map()
 const MENU_TIMEOUT_MS = 60_000
 
+// ─── 任务过程展示模式（/steps 动态切换）───────────────────
+// card: 收进卡片顶部的折叠面板（默认，运行中展开、结束后自动收起）
+// text: 每条工具调用发一条独立消息（旧行为）
+// off : 完全不展示过程
+const STEP_MODES = {
+  card: '卡片折叠面板',
+  text: '独立消息',
+  off: '不展示',
+}
+const DEFAULT_STEP_MODE = 'card'
+const stepModeMap = new Map()
+
+function getStepMode(chatId) {
+  return stepModeMap.get(chatId) || DEFAULT_STEP_MODE
+}
+
 // ─── 文字菜单构建 ─────────────────────────────────────────
 function buildAiMenuText(chatId) {
   const currentBackend = getBackendName(chatId)
@@ -94,7 +111,8 @@ async function handleCommand(chatId, openId, text) {
       `工作目录：${currentWorkDir}\n\n` +
       `直接发消息即可让 AI 执行任务。\n\n` +
       `命令：\n` +
-      `/ai - 切换 AI 后端\n` +
+      `/ai [名称] - 切换 AI 后端（带名称直接切换，如 /ai gemini）\n` +
+      `/steps [模式] - 任务过程展示方式（card / text / off）\n` +
       `/model - 切换当前 AI 的模型\n` +
       `/projects - 切换工作项目\n` +
       `/cd <路径> - 切换到自定义工作目录\n` +
@@ -115,6 +133,59 @@ async function handleCommand(chatId, openId, text) {
     }
     pendingMenuMap.set(chatId, { type: 'ai', timestamp: Date.now() })
     await sendText(chatId, buildAiMenuText(chatId))
+    return
+  }
+
+  // /ai <名称>：跳过菜单直接切。按 key 或 label 都认，不区分大小写
+  const aiSwitch = text.match(/^\/ai\s+(.+)$/)
+  if (aiSwitch) {
+    const wanted = aiSwitch[1].trim().toLowerCase()
+    const entries = getAvailableRunners()
+    const found = entries.find(
+      ([key, { label }]) => key.toLowerCase() === wanted || String(label || '').toLowerCase() === wanted,
+    )
+    if (!found) {
+      const names = entries.map(([key, { label, emoji }]) => `${emoji} ${key}（${label}）`).join('\n')
+      await sendText(chatId, `没有叫「${aiSwitch[1]}」的后端。\n\n可用：\n${names}\n\n发 /ai 可以看菜单`)
+      return
+    }
+    const [key, { label, emoji }] = found
+    if (key === getBackendName(chatId)) {
+      await sendText(chatId, `当前已经是 ${emoji} ${label}，无需切换。`)
+      return
+    }
+    chatBackendMap.set(chatId, key)
+    // resume id 是后端私有的，换后端必须清掉，否则新后端会拿旧 id 去 resume
+    claudeSessionMap.delete(chatId)
+    chatModelMap.delete(chatId)
+    await sendText(chatId, `✅ 已切换到 ${emoji} ${label}\n对话历史已自动清除`)
+    return
+  }
+
+  if (text === '/steps' || text.startsWith('/steps ')) {
+    const arg = text.slice('/steps'.length).trim().toLowerCase()
+    const current = getStepMode(chatId)
+    if (!arg) {
+      const lines = Object.entries(STEP_MODES).map(
+        ([key, desc]) => `${key === current ? '✅' : '　'} ${key} - ${desc}`,
+      )
+      await sendText(chatId,
+        `任务过程展示（当前：${current}）\n\n${lines.join('\n')}\n\n` +
+        `用法：/steps card | text | off\n` +
+        `card 运行中展开、结束后自动收起；text 是每条工具一条消息的旧行为；off 只看结果`
+      )
+      return
+    }
+    if (!Object.hasOwn(STEP_MODES, arg)) {
+      await sendText(chatId, `未知模式「${arg}」。可选：${Object.keys(STEP_MODES).join(' / ')}`)
+      return
+    }
+    if (arg === current) {
+      await sendText(chatId, `当前已经是 ${arg} 模式了。`)
+      return
+    }
+    stepModeMap.set(chatId, arg)
+    await sendText(chatId, `✅ 过程展示已切换为 ${arg}（${STEP_MODES[arg]}）\n下一轮任务生效`)
     return
   }
 
@@ -344,6 +415,17 @@ async function handleTask(chatId, userMessage) {
 
     await sendText(chatId, `⏳ [${backendLabel}] 正在处理：${userMessage.slice(0, 100)}...`)
 
+    // 回答用卡片渲染（原生支持 Markdown）。建卡失败就退回纯文本，不能让任务挂掉
+    const stepMode = getStepMode(chatId)
+    let card = null
+    try {
+      card = new CardStream({ client, chatId, tools: stepMode === 'card' })
+      await card.start()
+    } catch (err) {
+      console.error('[飞书] 卡片创建失败，降级为纯文本:', err.message)
+      card = null
+    }
+
     try {
       const newSessionId = await runner.run({
         prompt: userMessage,
@@ -351,9 +433,15 @@ async function handleTask(chatId, userMessage) {
         resumeSessionId,
         model: chatModelMap.get(chatId) || null,
         onOutput: async (text) => {
+          if (card) return card.append(text)
           try { await sendText(chatId, text) } catch (err) { console.error('[飞书] 发送消息失败:', err.message) }
         },
         onToolUse: async (label) => {
+          if (stepMode === 'off') return
+          if (card && stepMode === 'card') {
+            card.appendTool(label)
+            return
+          }
           sendText(chatId, `🔧 ${label}`).catch(() => {})
         },
       })
@@ -361,15 +449,21 @@ async function handleTask(chatId, userMessage) {
       if (newSessionId) claudeSessionMap.set(chatId, newSessionId)
 
       const remaining = sessionManager.pendingCount(chatId)
-      const doneText = remaining > 0 ? `✅ 任务完成（队列中还有 ${remaining} 个任务）` : '✅ 任务完成'
-      await sendText(chatId, doneText)
+      if (card) {
+        await card.finish()
+        if (remaining > 0) await sendText(chatId, `✅ 任务完成（队列中还有 ${remaining} 个任务）`)
+      } else {
+        const doneText = remaining > 0 ? `✅ 任务完成（队列中还有 ${remaining} 个任务）` : '✅ 任务完成'
+        await sendText(chatId, doneText)
+      }
     } catch (err) {
       claudeSessionMap.delete(chatId)
-      if (err.message === 'ABORTED') {
-        await sendText(chatId, '⛔ 任务已中止')
+      const aborted = err.message === 'ABORTED'
+      if (!aborted) console.error('[飞书] 执行错误:', err)
+      if (card) {
+        await card.fail(aborted ? new Error('任务已中止') : err).catch(() => {})
       } else {
-        console.error('[飞书] 执行错误:', err)
-        await sendText(chatId, `❌ 执行失败：${err.message}`)
+        await sendText(chatId, aborted ? '⛔ 任务已中止' : `❌ 执行失败：${err.message}`)
       }
     }
   }).catch(() => {})
