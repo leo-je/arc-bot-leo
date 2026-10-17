@@ -57,6 +57,12 @@ arc-bot-leo start
 
 ## 变更记录
 
+### 1.1.8
+
+- **修安装失败**：`@whiskeysockets/baileys`（WhatsApp 渠道）改到 `optionalDependencies`。它的传递依赖 `libsignal` 走 `git+https://` 协议，而 npm 新版默认 `--allow-git=none`，整包安装会直接报 `EALLOWGIT` 装不上——哪怕你根本不用 WhatsApp。改完之后禁用 git 依赖的环境也能正常安装，只是没有 WhatsApp 渠道。
+- WhatsApp 渠道在缺少 baileys 时给出明确提示（`npm install -g @whiskeysockets/baileys`），不再抛裸的 `ERR_MODULE_NOT_FOUND`。
+- 依赖数量从 450 降到 404（少的就是 baileys 那一串）。
+
 ### 1.1.7
 
 - **改名**：包名、命令行、配置目录、PM2 进程名统一为 `arc-bot-leo`（见上表）。

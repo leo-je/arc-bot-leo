@@ -360,8 +360,18 @@ async function handleTask(jid, userMessage) {
 
 // ─── Baileys 启动 ─────────────────────────────────────────
 export async function startWhatsappBot() {
-  const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } =
-    await import('@whiskeysockets/baileys')
+  let baileys
+  try {
+    baileys = await import('@whiskeysockets/baileys')
+  } catch (err) {
+    // baileys 是 optionalDependency：它的传递依赖 libsignal 走 git 协议，
+    // 在禁用 git 依赖的环境（如 npm 的 --allow-git=none）里装不上
+    if (err?.code === 'ERR_MODULE_NOT_FOUND') {
+      throw new Error('WhatsApp 渠道需要额外安装依赖：npm install -g @whiskeysockets/baileys')
+    }
+    throw err
+  }
+  const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } = baileys
 
   if (!existsSync(AUTH_DIR)) mkdirSync(AUTH_DIR, { recursive: true })
 
